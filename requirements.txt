@@ -1,0 +1,16 @@
+# Core dependencies
+aiohttp>=3.8.0
+aiosqlite>=0.19.0
+python-dotenv>=1.0.0
+
+# Logging and development
+colorlog>=6.7.0
+
+# Optional: for better JSON handling
+ujson>=5.8.0
+
+# Optional: for date/time handling
+python-dateutil>=2.8.2
+
+# Hugging Face Spaces
+gradio>=4.0.0
