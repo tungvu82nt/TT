@@ -98,6 +98,12 @@ class SoNoBot:
                     user_info['username'],
                     user_info['full_name']
                 )
+                
+            # Log incoming message
+            if text_content and chat_info:
+                username = f"@{user_info['username']}" if (user_info and user_info.get('username')) else f"{user_info.get('full_name', 'Anonymous')}" if user_info else "Anonymous"
+                chat_type = chat_info.get('type', 'unknown')
+                logger.info(f"📥 Tin nhắn từ {username} (ID: {user_info['user_id'] if user_info else 'unknown'}) trong {chat_type} chat ID {chat_info.get('chat_id', 'unknown')}: '{text_content}'")
 
             if not text_content:
                 return
@@ -118,6 +124,20 @@ class SoNoBot:
                     return
                 
                 amount, operation, note = calc_result
+                
+                # Check for ForceReply context
+                reply_to = message.get('reply_to_message')
+                if reply_to and 'text' in reply_to:
+                    reply_text = reply_to['text']
+                    if "💰 **NẠP TIỀN**" in reply_text:
+                        operation = 'add'
+                        # Treat amount as absolute value for deposit
+                        amount = abs(amount)
+                    elif "💸 **RÚT TIỀN**" in reply_text:
+                        operation = 'subtract'
+                        # Treat amount as absolute value for withdrawal
+                        amount = abs(amount)
+                
                 user_id = user_info['user_id']
                 
                 # Save transaction and get total
@@ -171,7 +191,19 @@ class SoNoBot:
                         f"🎯 **TỔNG:** `{format_money(totals['total'])}`"
                     )
                 
-                await bot.send_message(chat_info['chat_id'], response_text, parse_mode="Markdown")
+                logger.info(f"📤 Phản hồi giao dịch cho {user_id}: {operation} {amount}đ {f'- ghi chú: {note}' if note else ''}")
+                
+                # Inline Keyboard for quick actions
+                inline_keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "NẠP 💰", "callback_data": "cmd_deposit"},
+                            {"text": "RÚT 💸", "callback_data": "cmd_withdraw"}
+                        ]
+                    ]
+                }
+                
+                await bot.send_message(chat_info['chat_id'], response_text, parse_mode="Markdown", reply_markup=inline_keyboard)
                 return
 
             # Handle commands
@@ -208,8 +240,10 @@ class SoNoBot:
                         break
                 
                 # Get AI response
+                logger.info(f"🤖 Xử lý câu hỏi AI từ {user_info['user_id']}: '{question}'")
                 ai_response = await self.ai.get_help_response(question)
                 if ai_response:
+                    logger.info(f"🤖 Phản hồi AI cho {user_info['user_id']} đã gửi")
                     await bot.send_message(chat_info['chat_id'], ai_response)
                     return
                     
@@ -248,6 +282,42 @@ class SoNoBot:
         """Handle incoming update"""
         if 'message' in update:
             await self.handle_message(update['message'])
+        elif 'callback_query' in update:
+            await self.handle_callback_query(update['callback_query'])
+
+    async def handle_callback_query(self, callback_query: dict):
+        """Handle callback query"""
+        try:
+            query_id = callback_query['id']
+            data = callback_query.get('data')
+            message = callback_query.get('message')
+            
+            if not data or not message:
+                return
+
+            chat_id = message['chat']['id']
+            
+            # Answer callback to stop loading state
+            await bot.answer_callback_query(query_id)
+
+            if data == "cmd_deposit":
+                await bot.send_message(
+                    chat_id,
+                    "💰 **NẠP TIỀN**\n"
+                    "Nhập số tiền hoặc phép tính (ví dụ: `50k`, `10+20`):",
+                    reply_markup={'force_reply': True, 'input_field_placeholder': 'Ví dụ: 50k hoặc 10+20'}
+                )
+            
+            elif data == "cmd_withdraw":
+                await bot.send_message(
+                    chat_id,
+                    "💸 **RÚT TIỀN**\n"
+                    "Nhập số tiền hoặc phép tính (ví dụ: `50k`, `10+20`):",
+                    reply_markup={'force_reply': True, 'input_field_placeholder': 'Ví dụ: 50k hoặc 10+20'}
+                )
+                
+        except Exception as e:
+            logger.error(f"Error handling callback query: {e}")
 
     async def start(self):
         """Start the bot"""

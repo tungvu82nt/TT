@@ -14,9 +14,12 @@ def parse_calculation(text: str) -> Optional[Tuple[int, str, Optional[str]]]:
     Supported formats:
     +50 -> (50000, "add", None)
     +30+30 -> (60000, "add", None) - **NEW**: Compound expressions
+    +7.3 + 12.8 + 7.8 -> (27900, "add", None) - Expressions with spaces
     -100k -> (100000, "subtract", None) 
     +50k cafe -> (50000, "add_debt", "cafe")
     -200k -> (200000, "payment", None)
+    nạp 50 -> (50000, "add", None) - **NEW**: Keyword support
+    rút 100k -> (100000, "subtract", None) - **NEW**: Keyword support
     
     Args:
         text: Calculation expression to parse
@@ -27,23 +30,47 @@ def parse_calculation(text: str) -> Optional[Tuple[int, str, Optional[str]]]:
     if not text or not isinstance(text, str):
         return None
     
-    text = text.strip()
+    text = text.strip().lower()
     
-    # Handle compound expressions like +30+30 or +1.5tr+500k - CHỮA LỖI: thêm số lẻ không đơn vị
-    compound_pattern = r'^([+\-])\s*([0-9]+(?:\.[0-9]+)?(?:triệu|tr|[kmtm]|million)?)([+\-]\s*[0-9]+(?:\.[0-9]+)?(?:triệu|tr|[kmtm]|million)?)+'
-    compound_match = re.match(compound_pattern, text.lower())
-    
-    if not compound_match:
-        # CHỮA LỖI: Xử lý compound với số lẻ không đơn vị như +10.1+5.5
-        compound_pattern_new = r'^([+\-])\s*([0-9]+(?:\.[0-9]+)?)([+\-]\s*[0-9]+(?:\.[0-9]+)?)+'
-        compound_match = re.match(compound_pattern_new, text.lower())
-    
-    if compound_match:
-        # CHỮA LỖI: Xử lý compound expression đúng logic
+    # ------------------------
+    # Kiểm tra từ khóa nạp/rút
+    # ------------------------
+    keyword_patterns = [
+        # Từ khóa nạp/rút - chấp nhận cả nạp/nap và rút/rut
+        (r'^(nap|nạp)\s+([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)$', 'add'),
+        (r'^(rut|rút)\s+([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)$', 'subtract'),
         
-        # Extract all parts with their operation signs
-        parts_pattern = r'([+\-])\s*([0-9]+(?:\.[0-9]+)?(?:triệu|tr|[kmtm]|million)?)'
-        parts_matches = re.findall(parts_pattern, text.lower())
+        # Từ khóa nạp/rút với ghi chú - chấp nhận cả nạp/nap và rút/rut
+        (r'^(nap|nạp)\s+([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)\s+(.+)$', 'add_debt'),
+        (r'^(rut|rút)\s+([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)\s+(.+)$', 'payment'),
+    ]
+    
+    for pattern, operation in keyword_patterns:
+        match = re.match(pattern, text)
+        if match:
+            money_part = match.group(2)  # group(1) is the keyword, group(2) is the amount
+            try:
+                amount = parse_money(money_part)
+                note = match.group(3) if len(match.groups()) > 2 else None
+                return amount, operation, note
+            except ValueError:
+                continue
+    
+    # ------------------------
+    # Xử lý các định dạng khác
+    # ------------------------
+    
+    # ✅ Nếu không bắt đầu bằng +/-, tự động thêm + (mặc định là NẠP)
+    if not text.startswith(('+', '-')):
+        text = '+' + text
+    
+    # Check for compound expressions (multiple + or - signs)
+    has_multiple_operations = len(re.findall(r'[+\-]', text)) > 1
+    
+    if has_multiple_operations:
+        # Extract all parts with their operation signs, including spaces and decimal numbers
+        parts_pattern = r'([+\-])\s*([0-9]+(?:\.[0-9]+)?(?:triệu|tr|k|r|million)?)'
+        parts_matches = re.findall(parts_pattern, text)
         
         if not parts_matches:
             return None
@@ -62,7 +89,7 @@ def parse_calculation(text: str) -> Optional[Tuple[int, str, Optional[str]]]:
             except ValueError:
                 continue
         
-        # CHỮA LỖI: Logic đơn giản hơn - dựa vào dấu đầu tiên
+        # Logic đơn giản hơn - dựa vào dấu đầu tiên
         if first_operation == '+':
             operation = 'add'  # Bắt đầu bằng + là NẠP
         else:  # first_operation == '-'
@@ -72,16 +99,13 @@ def parse_calculation(text: str) -> Optional[Tuple[int, str, Optional[str]]]:
     
     # Pattern for simple arithmetic with money
     patterns = [
-        # Simple add/subtract with money - CHỮA LỖI: thêm số lẻ
-        (r'^\+\s*([0-9]+(?:\.[0-9]+)?[ktr]?)$', 'add'),
-        (r'^\-\s*([0-9]+(?:\.[0-9]+)?[ktr]?)$', 'subtract'),
+        # Simple add/subtract with money - hỗ trợ đầy đủ đơn vị k, tr, r
+        (r'^\+\s*([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)$', 'add'),
+        (r'^\-\s*([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)$', 'subtract'),
         
-        # Add/subtract with money and note - CHỮA LỖI: thêm số lẻ
-        (r'^\+\s*([0-9]+(?:\.[0-9]+)?[ktr]?)\s+(.+)$', 'add_debt'),
-        (r'^\-\s*([0-9]+(?:\.[0-9]+)?[ktr]?)\s+(.+)$', 'payment'),
-        
-        # Just money amount (assume add) - CHỮA LỖI: thêm số lẻ
-        (r'^([0-9]+(?:\.[0-9]+)?[ktr]?)$', 'add'),
+        # Add/subtract with money and note
+        (r'^\+\s*([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)\s+(.+)$', 'add_debt'),
+        (r'^\-\s*([0-9]+(?:\.[0-9]+)?(?:tr|triệu|k|r)?)\s+(.+)$', 'payment'),
     ]
     
     for pattern, operation in patterns:
@@ -103,23 +127,35 @@ def generate_calculation_help() -> str:
 🧮 **Nhập liệu nhanh với công thức**
 
 **Định dạng hỗ trợ:**
+• `10k` - NẠP tiền 10,000đ (không cần tiền tố, mặc định là nạp)
 • `+50k` - NẠP tiền 50,000đ
 • `-50k` - RÚT tiền 50,000đ  
-• `+100k cafe` - NẠP tiền 100,000đ (ghi chú)
+• `nạp 10k` - NẠP tiền 10,000đ (từ khóa)
+• `rút 50k` - RÚT tiền 50,000đ (từ khóa)
+• `100k cafe` - NẠP tiền 100,000đ (ghi chú: cafe)
+• `+100k cafe` - NẠP tiền 100,000đ (ghi chú: cafe)
+• `nạp 100k cafe` - NẠP tiền 100,000đ (ghi chú: cafe)
 • `-200k` - RÚT tiền 200,000đ
-• `+50k+30k` - NẠP tiền tổng 80,000đ ⭐ **MỚI!**
-• `+100k+50k` - NẠP tiền tổng 150,000đ ⭐ **MỚI!**
+• `rút 200k` - RÚT tiền 200,000đ
+• `50k+30k` - NẠP tiền tổng 80,000đ (không cần tiền tố)
+• `+100k+50k` - NẠP tiền tổng 150,000đ
 
 **Ví dụ thực tế:**
-• `+50k` → NẠP tiền 50,000đ
+• `100k` → NẠP tiền 100,000đ
+• `50` → NẠP tiền 50,000đ  
 • `-50k` → RÚT tiền 50,000đ
-• `+1.5tr trưa` → NẠP tiền 1,500,000đ (trưa)
-• `+50k+30k` → NẠP tiền 80,000đ (tính tổng nhiều số)
+• `nạp 50` → NẠP tiền 50,000đ
+• `rút 50k` → RÚT tiền 50,000đ
+• `1.5tr trưa` → NẠP tiền 1,500,000đ (trưa)
+• `nạp 1.5tr trưa` → NẠP tiền 1,500,000đ (trưa)
+• `100k+50k` → NẠP tiền 150,000đ (tính tổng nhiều số)
 
 💡 **Mẹo:** 
-• Dùng dấu + để NẠP tiền, - để RÚT tiền!
-• **MỚI**: Có thể cộng nhiều số tiền cùng lúc như +50k+30k!
-• **Lưu ý**: Với số nhỏ không có k, chỉ tính đơn vị đồng (ví dụ: +30 = 30đ)
+• Không cần tiền tố cho nạp tiền (mặc định là nạp)
+• Dùng dấu - hoặc từ "rút" để rút tiền!
+• Dùng từ "nạp" để nạp tiền rõ ràng!
+• Có thể cộng nhiều số tiền cùng lúc như 50k+30k!
+• Lưu ý: Với số nhỏ không có k, chỉ tính đơn vị đồng (ví dụ: 30 = 30đ)
     """.strip()
 
 def format_calculation_result(amount: int, operation: str, note: str = None) -> str:

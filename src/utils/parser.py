@@ -44,9 +44,9 @@ def parse_money(text: str) -> int:
         (r'^(\d+\.?\d*)\s*ngàn$', lambda m: int(float(m.group(1)) * 1000)),      # 50ngàn
         (r'^(\d+\.?\d*)\s*n$', lambda m: int(float(m.group(1)) * 1000)),         # 50n
         
-        # Plain numbers (treat as VND) - CHỮA LỖI: số lẻ parse thành đồng thật
-        (r'^(\d+\.\d+)$', lambda m: int(float(m.group(1)) * 1000)),               # 10.1 -> 10100 đồng (10.1k)
-        (r'^(\d+)$', lambda m: int(float(m.group(1)) * 1000)),                    # 200 -> 200,000 đồng (200k)
+        # Plain numbers (treat as VND) - SỬA LỖI: số lẻ parse thành đồng thật
+        (r'^(\d+\.\d+)$', lambda m: int(float(m.group(1)))),               # 10.1 -> 10 đồng
+        (r'^(\d+)$', lambda m: int(float(m.group(1)))),                    # 200 -> 200 đồng
     ]
     
     for pattern, converter in patterns:

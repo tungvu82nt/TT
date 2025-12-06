@@ -48,23 +48,23 @@ class CommandHandler:
                 welcome_text = f"""
 🎉 Chào mừng đến với SoNoBot!
 
-📝 **SoNoBot** là bot quản lý nợ cá nhân và nhóm đơn giản.
-
-🔹 **Các lệnh chính:**
-• NẠP tiền (người khác nợ bạn)
-• RÚT tiền (bạn trả nợ)
-• Xem báo cáo nợ
-• Xóa giao dịch
-• Xem hướng dẫn
-
-💡 **Mẹo:** Có thể viết tiền tệ ngắn gọn: `50k`, `1.5tr`, `200`
-
-🚀 Bắt đầu quản lý nợ ngay!
+📝 **SoNoBot** là bot quản lý NẠP vs RÚT
                 """.strip()
+                
+                # Inline Keyboard
+                inline_keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "NẠP 💰", "callback_data": "cmd_deposit"},
+                            {"text": "RÚT 💸", "callback_data": "cmd_withdraw"}
+                        ]
+                    ]
+                }
                 
                 await bot.send_message(
                     chat_info['chat_id'],
-                    welcome_text
+                    welcome_text,
+                    reply_markup=inline_keyboard
                 )
                 
                 logger.info(f"User {user_info['username']} ({user_info['user_id']}) started bot")

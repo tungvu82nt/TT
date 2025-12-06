@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Code Review & Consistency Check",
+  "description": "Tự động review và kiểm tra tính nhất quán của code trong dự án khi có thay đổi file Python. Sử dụng các công cụ MCP (filesystem, sequential-thinking, fetch, context7) để phân tích và đảm bảo tất cả hàm code được thống nhất theo chuẩn của dự án.",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "*.py",
+      "src/**/*.py",
+      "app.py",
+      "main.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Vui lòng thực hiện các bước sau bằng tiếng Việt:\n\n1. Sử dụng MCP sequential-thinking để phân tích có hệ thống các thay đổi code\n2. Sử dụng MCP filesystem để đọc và kiểm tra tất cả các file Python liên quan trong dự án\n3. Sử dụng MCP context7 để hiểu ngữ cảnh và mối quan hệ giữa các module\n4. Sử dụng MCP fetch nếu cần tra cứu thông tin bổ sung về best practices\n\nNhiệm vụ chính:\n- Review code đã được chỉnh sửa về mặt chất lượng, logic và bảo mật\n- Kiểm tra tính nhất quán của naming conventions, code style, và patterns\n- Đảm bảo các hàm tuân theo chuẩn chung của dự án\n- Xác định các vấn đề tiềm ẩn hoặc cải tiến có thể thực hiện\n- Đề xuất cách thống nhất code nếu phát hiện sự không nhất quán\n\nGiữ nguyên giao diện hiện tại và chỉ đưa ra nhận xét, đề xuất cụ thể bằng tiếng Việt."
+  }
+}
